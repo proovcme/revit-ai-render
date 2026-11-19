@@ -48,6 +48,20 @@ public sealed class MaskEditor : FrameworkElement
         RefreshMask();
     }
 
+    internal void LoadMask(BitmapSource mask)
+    {
+        if (frame == null || pixels == null || mask.Format != PixelFormats.Gray8 ||
+            mask.PixelWidth != frame.PixelWidth || mask.PixelHeight != frame.PixelHeight)
+            throw new InvalidOperationException("Mask has different dimensions or pixel format.");
+        mask.CopyPixels(pixels, frame.PixelWidth, 0);
+        selected = 0;
+        foreach (var value in pixels)
+            if (value == 255)
+                selected++;
+        Redraw(0, 0, frame.PixelWidth, frame.PixelHeight);
+        RefreshMask();
+    }
+
     internal void ClearMask()
     {
         if (pixels == null || !HasSelection)

@@ -10,7 +10,7 @@
     <Reference Include="System.Runtime.Serialization" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="../../src/McpWire.cs;../../src/McpPipeServer.cs;../../src/MaskEditor.cs;../../src/ResultViewport.xaml.cs;../../src/RenderPreviewWindow.xaml.cs;../../src/RenderPanel.xaml.cs;../../src/ConnectionWindow.xaml.cs;../../src/Infrastructure.cs;../../src/Settings.cs;../../src/ResultStorage.cs;../../src/MacBridge.cs;../../src/SiliconedProtocol.cs;../../src/RenderJobService.cs;../../src/SiliconedBackend.cs;../../src/MfluxBackend.cs" />
+    <Compile Include="../../src/McpWire.cs;../../src/McpPipeServer.cs;../../src/MaskEditor.cs;../../src/ElementMask.cs;../../src/ResultViewport.xaml.cs;../../src/RenderPreviewWindow.xaml.cs;../../src/RenderPanel.xaml.cs;../../src/ConnectionWindow.xaml.cs;../../src/Infrastructure.cs;../../src/Settings.cs;../../src/ResultStorage.cs;../../src/MacBridge.cs;../../src/SiliconedProtocol.cs;../../src/RenderJobService.cs;../../src/SiliconedBackend.cs;../../src/MfluxBackend.cs" />
     <Page Include="../../src/ConnectionWindow.xaml" Link="ConnectionWindow.xaml" />
     <Page Include="../../src/RenderPanel.xaml" Link="RenderPanel.xaml" />
     <Page Include="../../src/RenderTheme.xaml" Link="RenderTheme.xaml" />

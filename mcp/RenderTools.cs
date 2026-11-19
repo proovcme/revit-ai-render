@@ -24,7 +24,7 @@ internal sealed class RenderTools(RenderConnection connection)
     }
 
     [McpServerTool(Name = "start_render", Destructive = false, Idempotent = true)]
-    [Description("Экспортирует выбранный 3D-вид и запускает редактирование полного кадра через Siliconed на настроенном Mac. Сразу возвращает ID задачи.")]
+    [Description("Принимает асинхронную задачу на экспорт 3D-вида. Для полного кадра используется Siliconed, при elementIds используется MFLUX. Возвращает ID до экспорта. Проверяйте render_status до готовности PNG или завершения с ошибкой.")]
     public async Task<CallToolResult> Start(
         [Description("Новый UUID задачи. Для повтора того же запроса используйте тот же UUID.")] string requestId,
         [Description("Точное название активного проекта из render_views.")] string project,
@@ -32,12 +32,14 @@ internal sealed class RenderTools(RenderConnection connection)
         [Description("ID 3D-вида из render_views.")] string viewId,
         [Description("Изменения, которые нужно применить к кадру.")] string prompt,
         CancellationToken cancellationToken,
-        bool preserveGeometry = true)
+        bool preserveGeometry = true,
+        [Description("Необязательный список из 1–32 ElementId или UniqueId элементов текущего проекта. При наличии списка используется MFLUX и маска видимых частей. Опустите список для полного кадра.")] string[]? elementIds = null)
     {
         var reply = await connection.CallAsync(new McpRequest
         {
-            Operation = "start", Id = requestId, Project = project, ProjectToken = projectToken, ViewId = viewId,
-            Prompt = prompt, PreserveGeometry = preserveGeometry
+            Operation = elementIds == null ? "start" : "start_elements",
+            Id = requestId, Project = project, ProjectToken = projectToken, ViewId = viewId,
+            Prompt = prompt, PreserveGeometry = preserveGeometry, ElementIds = elementIds
         }, cancellationToken);
         return Report(reply.Job!);
     }

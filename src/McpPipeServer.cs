@@ -101,6 +101,7 @@ internal sealed class McpPipeServer : IDisposable
                     NextOffset = request.Offset >= 0 && request.Offset < list.Views.Length - 100 ? request.Offset + 100 : (int?)null
                 };
             case "start":
+            case "start_elements":
                 var job = await panel.Dispatcher.InvokeAsync(() => panel.StartMcpAsync(request, token), System.Windows.Threading.DispatcherPriority.Normal, token)
                     .Task.Unwrap().ConfigureAwait(false);
                 return new McpReply { Job = Summarize(job) };

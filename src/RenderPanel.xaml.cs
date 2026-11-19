@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -34,6 +35,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
     private BitmapSource? resultImage;
     private RenderPreviewWindow? largePreview;
     internal IntPtr HostWindow { private get; set; }
+    private const int MaskFramePixels = 1920;
     private string? previewPath;
     private ViewChoice? previewView;
     private bool IsMasked => MaskedMode?.IsChecked == true;
@@ -178,15 +180,35 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
 
     private void ClearMask(object sender, RoutedEventArgs args) => MaskCanvas.ClearMask();
 
+    private async void UseElementSelection(object sender, RoutedEventArgs args)
+    {
+        if (revitBusy || jobBusy || Views.SelectedItem is not ViewChoice view)
+            return;
+
+        try
+        {
+            SetRevitBusy(true);
+            SetPreviewStatus("Построение маски по выбранным элементам…");
+            var frames = await views.ExportElementFramesAsync(view, LocalFiles.NewPreview(), MaskFramePixels);
+            var selected = await Task.Run(() => new { Frame = LocalFiles.OpenPng(frames.Source), Mask = ElementMask.Extract(frames) });
+            ShowPreview(selected.Frame);
+            MaskCanvas.LoadMask(selected.Mask);
+            previewPath = frames.Source;
+            previewView = view;
+            SetPreviewStatus("");
+        }
+        catch (Exception error) { ShowPreviewError(error); }
+        finally { SetRevitBusy(false); }
+    }
+
     private async Task ExportPreviewAsync(ViewChoice view)
     {
         ShowPreview(null);
         SetPreviewStatus("Экспорт кадра Revit…");
-        var path = await views.ExportAsync(view, LocalFiles.NewPreview(), 768);
-        var frame = await Task.Run(() => LocalFiles.OpenPng(path));
+        var path = await views.ExportAsync(view, LocalFiles.NewPreview(), MaskFramePixels);
+        ShowPreview(await Task.Run(() => LocalFiles.OpenPng(path)));
         previewPath = path;
         previewView = view;
-        ShowPreview(frame);
         SetPreviewStatus("");
     }
 
@@ -242,11 +264,25 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
         if (string.IsNullOrWhiteSpace(request.ViewId))
             throw new RenderException("view-required", "Укажите ID 3D-вида из списка Revit.");
 
+        var elementIds = request.ElementIds;
+        if (request.Operation == "start_elements")
+        {
+            if (elementIds == null || elementIds.Length == 0 || elementIds.Length > 32 ||
+                elementIds.Any(value => value == null || !Regex.IsMatch(value, @"\A(?:[1-9][0-9]{0,18}|[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}-[a-fA-F0-9]{8,16})\z")))
+                throw new RenderException("element-id", "Передайте от 1 до 32 корректных ElementId или UniqueId.");
+            elementIds = elementIds.Select(value => value.ToLowerInvariant()).Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        }
+        else if (elementIds != null)
+            throw new RenderException("element-id", "Для списка элементов используйте режим маски.");
+
         var previous = await Task.Run(() => ResultStorage.Find(id), token);
         if (previous != null)
         {
-            if (previous.Legacy || previous.IsMasked || previous.ViewUniqueId != request.ViewId ||
-                previous.Project != request.Project || previous.PreserveGeometry != request.PreserveGeometry || previous.Prompt != prompt)
+            var sameElements = (previous.ElementIds ?? Array.Empty<string>()).SequenceEqual(elementIds ?? Array.Empty<string>());
+            if (previous.Legacy || previous.IsMasked != (elementIds != null) || !sameElements ||
+                previous.ViewUniqueId != request.ViewId || previous.Project != request.Project ||
+                previous.PreserveGeometry != request.PreserveGeometry || previous.Prompt != prompt)
                 throw new RenderException("request-conflict", "Этот ID уже используется другой задачей.");
             return previous;
         }
@@ -268,7 +304,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
                 throw new RenderException("project-changed", "Активный проект сменился. Обновите список 3D-видов.");
 
             var accepted = new TaskCompletionSource<RenderJob>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _ = RunGenerationAsync(view, prompt!, request.PreserveGeometry, null, null, id, accepted);
+            _ = RunGenerationAsync(view, prompt!, request.PreserveGeometry, null, null, id, accepted, elementIds);
             return await accepted.Task;
         }
         finally
@@ -285,34 +321,49 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
     }
 
     private async Task RunGenerationAsync(ViewChoice view, string prompt, bool preserve, BitmapSource? mask,
-        string? source, Guid? requestId = null, TaskCompletionSource<RenderJob>? accepted = null)
+        string? source, Guid? requestId = null, TaskCompletionSource<RenderJob>? accepted = null, string[]? elementIds = null)
     {
         RenderJob? job = null;
-        var masked = mask != null;
+        var masked = mask != null || elementIds != null;
         try
         {
             jobBusy = true;
             SetRevitBusy(true);
-            UpdateProgress(new JobProgress(masked ? "Сохранение кадра и маски…" : "Экспорт выбранного вида Revit…"));
+            var initial = elementIds != null ? "Построение маски по элементам Revit…" :
+                masked ? "Проверка актуальности кадра Revit…" : "Экспорт выбранного вида Revit…";
+            UpdateProgress(new JobProgress(initial));
             job = await Task.Run(() =>
             {
                 var created = ResultStorage.Create(view, prompt, preserve, Settings.Load(), masked, requestId);
+                created.ElementIds = elementIds;
                 ResultStorage.Save(created, replaceExisting: false);
                 return created;
             });
             activeJobId = job.Id;
-            activeProgress = Tuple.Create(job.Id, new JobProgress("Экспорт выбранного вида Revit…"));
+            activeProgress = Tuple.Create(job.Id, new JobProgress(initial));
             accepted?.TrySetResult(job);
-            if (mask != null)
+            if (elementIds != null)
             {
-                await Task.Run(() =>
+                var frames = await views.ExportElementFramesAsync(view, job.DirectoryPath, MaskFramePixels, elementIds);
+                await Task.Run(() => ElementMask.Save(ElementMask.Extract(frames), job.MaskPath));
+            }
+            else if (mask != null)
+            {
+                await views.ExportAsync(view, job.DirectoryPath, MaskFramePixels);
+                var updated = await Task.Run(() =>
                 {
-                    File.Copy(source!, job.SourcePath);
-                    var png = new PngBitmapEncoder();
-                    png.Frames.Add(BitmapFrame.Create(mask));
-                    using var file = new FileStream(job.MaskPath, FileMode.CreateNew);
-                    png.Save(file);
+                    var exported = LocalFiles.OpenPng(job.SourcePath);
+                    return LocalFiles.HaveSamePixels(LocalFiles.OpenPng(source!), exported) ? null : exported;
                 });
+                if (updated != null)
+                {
+                    ShowPreview(updated);
+                    previewPath = job.SourcePath;
+                    previewView = view;
+                    SetPreviewStatus("Кадр обновлён. Выделите область заново.");
+                    throw new RenderException("preview-changed", "Изображение вида изменилось. Выделите область на новом кадре.");
+                }
+                await Task.Run(() => ElementMask.Save(mask, job.MaskPath));
             }
             else
             {
@@ -641,6 +692,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
         MaskCanvas.IsEnabled = !revitBusy && !jobBusy;
         MaskToolBox.IsEnabled = ZoomBox.IsEnabled = !revitBusy && !jobBusy;
         MaskSizeBox.IsEnabled = !revitBusy && !jobBusy && MaskToolBox.SelectedIndex != 2;
+        SelectElementsButton.IsEnabled = !revitBusy && !jobBusy && Views.SelectedItem is ViewChoice;
         ClearMaskButton.IsEnabled = !revitBusy && !jobBusy && MaskCanvas.HasSelection;
         MaskHint.Text = MaskCanvas.HasSelection ? "" : "Отметьте участок, который нужно изменить.";
         MaskHint.Visibility = local && !MaskCanvas.HasSelection ? Visibility.Visible : Visibility.Collapsed;

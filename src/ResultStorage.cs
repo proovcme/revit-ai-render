@@ -42,6 +42,7 @@ internal sealed class RenderJob
     [DataMember] public string? TensorUnits { get; set; }
 
     [DataMember(EmitDefaultValue = false)] public string? Backend { get; set; }
+    [DataMember(EmitDefaultValue = false)] public string[]? ElementIds { get; set; }
     [DataMember(EmitDefaultValue = false)] public string? MfluxPython { get; set; }
     [DataMember(EmitDefaultValue = false)] public string? MfluxCli { get; set; }
     [DataMember(EmitDefaultValue = false)] public string? MfluxModelPath { get; set; }

@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Media;
 using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Windows.Media.Imaging;
@@ -21,6 +24,28 @@ internal static class LocalFiles
         var frame = png.Frames[0];
         frame.Freeze();
         return frame;
+    }
+
+    internal static bool HaveSamePixels(BitmapSource first, BitmapSource second)
+    {
+        if (first.PixelWidth != second.PixelWidth || first.PixelHeight != second.PixelHeight)
+            return false;
+
+        var left = new FormatConvertedBitmap(first, PixelFormats.Bgra32, null, 0);
+        var right = new FormatConvertedBitmap(second, PixelFormats.Bgra32, null, 0);
+        const int blockRows = 16;
+        var stride = checked(first.PixelWidth * 4);
+        var firstBlock = new byte[checked(stride * blockRows)];
+        var secondBlock = new byte[firstBlock.Length];
+        for (var y = 0; y < first.PixelHeight; y += blockRows)
+        {
+            var area = new Int32Rect(0, y, first.PixelWidth, Math.Min(blockRows, first.PixelHeight - y));
+            left.CopyPixels(area, firstBlock, stride, 0);
+            right.CopyPixels(area, secondBlock, stride, 0);
+            if (!firstBlock.SequenceEqual(secondBlock))
+                return false;
+        }
+        return true;
     }
 }
 

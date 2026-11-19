@@ -17,8 +17,8 @@ var builder = Host.CreateEmptyApplicationBuilder(settings: null);
 builder.Services.AddSingleton(new RenderConnection(pid));
 builder.Services.AddMcpServer(options =>
     {
-        options.ServerInfo = new() { Name = "Revit AI Render", Version = "0.3.1" };
-        options.ServerInstructions = "Рабочий процесс: render_views, start_render, render_status, get_render. Готовые кадры доступны через list_renders. Используйте один и тот же requestId при повторной проверке неопределённого запуска.";
+        options.ServerInfo = new() { Name = "Revit AI Render", Version = "0.4.0" };
+        options.ServerInstructions = "После render_views и start_render проверяйте render_status по ID задачи. Ответ start_render означает приём задачи до экспорта. Получайте PNG через get_render только при resultReady=true. При обрыве связи сохраняйте ID и проверяйте ту же задачу. Готовые кадры доступны через list_renders.";
     })
     .WithStdioServerTransport()
     .WithTools<RenderTools>();

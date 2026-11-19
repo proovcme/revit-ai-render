@@ -36,7 +36,7 @@ public sealed class RevitAddin : IExternalApplication
             application.ControlledApplication.DocumentClosed += OnDocumentClosed;
             if (File.Exists(Path.Combine(LocalFiles.Root, "mcp.enabled")))
                 mcp = new McpPipeServer(Panel, views);
-            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.3.1");
+            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.4.0");
             return Result.Succeeded;
         }
         catch (Exception error)

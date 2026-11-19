@@ -45,6 +45,9 @@
                             Checked="ModeChanged" Unchecked="ModeChanged"
                             ToolTip="Выделить участок кадра. При выключенном флажке обрабатывается весь кадр."/>
                         <StackPanel x:Name="MaskTools" Visibility="Collapsed">
+                            <Button x:Name="SelectElementsButton" Content="Из выбора Revit" Click="UseElementSelection"
+                                ToolTip="Создать маску видимых частей элементов, выделенных в Revit"
+                                HorizontalAlignment="Left" Style="{StaticResource Action}" Margin="0,0,0,5"/>
                             <WrapPanel>
                                 <ComboBox x:Name="MaskToolBox" MinWidth="110" SelectedIndex="0" Style="{StaticResource Field}"
                                           SelectionChanged="MaskToolChanged" AutomationProperties.Name="Инструмент маски"

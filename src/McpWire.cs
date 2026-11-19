@@ -12,6 +12,7 @@ internal sealed class McpRequest
     [DataMember] public string Operation { get; set; } = "";
     [DataMember] public string? Id { get; set; }
     [DataMember] public string? ViewId { get; set; }
+    [DataMember(EmitDefaultValue = false)] public string[]? ElementIds { get; set; }
     [DataMember] public string? Project { get; set; }
     [DataMember] public string? ProjectToken { get; set; }
     [DataMember] public string? Prompt { get; set; }

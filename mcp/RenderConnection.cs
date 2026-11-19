@@ -29,7 +29,7 @@ internal sealed class RenderConnection(int? targetPid)
         }
     }
 
-    private static string Unavailable(McpRequest request) => request.Operation == "start"
+    private static string Unavailable(McpRequest request) => (request.Operation is "start" or "start_elements")
         ? $"Связь с Revit прервалась. Проверьте задачу {request.Id} перед повтором. Повторный запрос должен содержать тот же requestId."
         : "Revit не ответил. Проверьте, что открыта нужная сессия AI Render.";
 

@@ -8,6 +8,7 @@ namespace RevitAiRender
     {
         internal Task<ViewList> ListAsync() => Task.FromResult(new ViewList());
         internal Task<string> ExportAsync(ViewChoice _, string dir, int size) => throw new NotSupportedException();
+        internal Task<ElementFrames> ExportElementFramesAsync(ViewChoice _, string dir, int size, string[]? ids = null) => throw new NotSupportedException();
     }
 
     internal sealed class ViewList

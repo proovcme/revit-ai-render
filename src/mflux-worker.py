@@ -34,44 +34,72 @@ def siliconed_idle(cli):
     return state.get("ok") and not any(state.get(k) for k in ("running", "queue", "installing", "waiting_for_license"))
 
 
+MAX_WORKING_PIXELS = 1024 * 1024
+MAX_WORKING_SIDE = 1536
+MIN_CROP_SIDE = 640
+CROP_CONTEXT = 128
+CANVAS_ALIGNMENT = 32
+
+
+def working_region(size, bounds):
+    width, height = size
+    full = (0, 0, width, height)
+    if width * height <= MAX_WORKING_PIXELS and max(size) <= MAX_WORKING_SIDE:
+        return full
+
+    left, top, right, bottom = bounds
+    crop_width = min(width, max(MIN_CROP_SIDE, right - left + 2 * CROP_CONTEXT))
+    crop_height = min(height, max(MIN_CROP_SIDE, bottom - top + 2 * CROP_CONTEXT))
+    if crop_width * crop_height >= width * height * 0.75:
+        return full
+
+    x = min(max(0, (left + right - crop_width) // 2), width - crop_width)
+    y = min(max(0, (top + bottom - crop_height) // 2), height - crop_height)
+    return x, y, x + crop_width, y + crop_height
+
+
 def prepare():
     with Image.open("source.png") as image, Image.open("mask.png") as mask_file:
         source = image.convert("RGBA")
         mask = mask_file.convert("L")
-    if source.size != mask.size or set(np.unique(np.asarray(mask))) - {0, 255} or mask.getbbox() is None:
+    bounds = mask.getbbox()
+    if source.size != mask.size or bounds is None or set(np.unique(np.asarray(mask))) - {0, 255}:
         raise JobFailure("invalid-mask")
 
-    headroom = 32
-    width, height = source.size
-    scale = min(1.0, (1048576 / (width * height)) ** 0.5, 1536 / max(width, height))
+    box = working_region(source.size, bounds)
+    region = source.crop(box)
+    width, height = region.size
+    scale = min(1.0, (MAX_WORKING_PIXELS / (width * height)) ** 0.5, MAX_WORKING_SIDE / max(width, height))
     while True:
         content = (max(1, round(width * scale)), max(1, round(height * scale)))
-        canvas = tuple((dim + headroom - 1) // headroom * headroom for dim in content)
-        if canvas[0] * canvas[1] <= 1048576:
+        canvas = tuple((dim + CANVAS_ALIGNMENT - 1) // CANVAS_ALIGNMENT * CANVAS_ALIGNMENT for dim in content)
+        if canvas[0] * canvas[1] <= MAX_WORKING_PIXELS:
             break
         scale *= 0.98
 
     if min(content) < 64:
         raise JobFailure("frame-small")
     reference = Image.new("RGB", canvas, (255, 255, 255))
-    resized = source if source.size == content else source.resize(content, Image.Resampling.LANCZOS)
+    resized = region if region.size == content else region.resize(content, Image.Resampling.LANCZOS)
     reference.paste(resized, (0, 0), resized.getchannel("A"))
     selected = Image.new("L", canvas)
-    selected.paste(mask.resize(content, Image.Resampling.NEAREST), (0, 0))
+    selected.paste(mask.crop(box).resize(content, Image.Resampling.NEAREST), (0, 0))
     if selected.getbbox() is None:
         raise JobFailure("mask-small")
     reference.save("working-source.png")
     selected.save("working-mask.png")
-    return source, mask, content, canvas
+    return source, mask, box, content, canvas
 
 
-def compose(source, mask, content, canvas):
+def compose(source, mask, box, content, canvas):
     with Image.open("raw.png") as raw_file:
         if raw_file.size != canvas:
             raise JobFailure("wrong-result-size")
-        region = raw_file.convert("RGBA").crop((0, 0, *content))
-    region = region.resize(source.size, Image.Resampling.LANCZOS)
-    result = Image.composite(region, source, mask)
+        generated = raw_file.convert("RGBA").crop((0, 0, *content))
+    original = source.crop(box)
+    generated = generated.resize(original.size, Image.Resampling.LANCZOS)
+    result = source.copy()
+    result.paste(Image.composite(generated, original, mask.crop(box)), box[:2])
     before = np.asarray(source)
     after = np.asarray(result)
     area = np.asarray(mask) == 255
@@ -131,7 +159,7 @@ def run():
         raise JobFailure("mflux-busy")
 
     publish("preparing", step=0)
-    source, mask, content, canvas = prepare()
+    source, mask, box, content, canvas = prepare()
     if Path("cancel-requested").is_dir():
         publish("cancelled")
         return
@@ -169,7 +197,7 @@ def run():
     if child.returncode != 0:
         raise JobFailure("mflux-exit")
     publish("composing", step=8)
-    pixels = compose(source, mask, content, canvas)
+    pixels = compose(source, mask, box, content, canvas)
     log = Path("generation.log").read_text(encoding="utf-8", errors="replace")
     gpu = re.search(r"Peak MLX memory:\s*([\d.]+)\s*GB", log)
     publish("done", step=8, width=source.width, height=source.height, rawWidth=canvas[0],

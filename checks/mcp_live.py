@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--view", required=True)
     parser.add_argument("--pid", type=int, required=True)
     parser.add_argument("--request-id", required=True, type=uuid.UUID)
+    parser.add_argument("--prompt", default="Визуализируй фасады из светлого камня и кирпича в мягком вечернем свете. Сохрани ракурс и форму зданий.")
+    parser.add_argument("--element-id", action="append", help="ElementId or UniqueId for a masked job")
     args = parser.parse_args()
     request_id = args.request_id.hex
     client = Client([str(args.server.resolve()), "--revit-pid", str(args.pid)])
@@ -39,8 +41,12 @@ def main():
                 raise RuntimeError("Active project changed.")
         start = {"requestId": request_id, "project": args.project, "projectToken": views["projectToken"],
                  "viewId": view["id"],
-                 "prompt": 'Визуализируй фасады из светлого камня и кирпича в мягком вечернем свете. Сохрани ракурс и форму зданий.'}
+                 "prompt": args.prompt}
+        if args.element_id:
+            start["elementIds"] = args.element_id
         result = client.call("start_render", start)["structuredContent"]
+        backend = "mflux" if args.element_id else "siliconed"
+        assert result["backend"] == backend, result
         assert result["id"] == request_id, result
         print(f"ACCEPTED {request_id}", flush=True)
         replay = client.call("start_render", start)["structuredContent"]
@@ -53,7 +59,8 @@ def main():
             if current != previous:
                 print(json.dumps(current, ensure_ascii=False), flush=True)
                 previous = current
-            if status["state"] == "done":
+            if status["resultReady"]:
+                assert status["state"] == "done"
                 break
             if status["state"] in {"failed", "interrupted", "cancelled"}:
                 raise RuntimeError("Render did not complete.")
@@ -67,7 +74,7 @@ def main():
         disk = Path(os.environ["LOCALAPPDATA"]) / "RevitAiRender020" / "jobs" / request_id / "result.png"
         digest = hashlib.sha256(received).hexdigest()
         assert digest == hashlib.sha256(disk.read_bytes()).hexdigest()
-        print(f"PASS MCP start → Siliconed → PNG: {status['width']}x{status['height']}, SHA-256 {digest}", flush=True)
+        print(f"PASS MCP start → {backend} → PNG: {status['width']}x{status['height']}, SHA-256 {digest}", flush=True)
     finally:
         client.close()
 

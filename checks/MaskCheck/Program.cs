@@ -73,6 +73,8 @@ internal static class Program
             return;
         }
         CheckResultViewport();
+        CheckFrameFreshness();
+        CheckElementMask();
         CheckMfluxSettings();
         CheckConnectionSettings();
         if (args.Length == 1 && args[0] == "--connection-check")
@@ -182,6 +184,48 @@ internal static class Program
         if (!viewer.HasResult || ((FrameworkElement)viewer.FindName("ComparisonTools")).Visibility != Visibility.Collapsed)
             throw new InvalidOperationException("A render without a source must remain viewable.");
         Console.WriteLine("PASS result viewport: fullscreen default, opt-in split, original/result endpoints, next result reset, missing source.");
+    }
+
+    private static void CheckFrameFreshness()
+    {
+        const int width = 80;
+        const int height = 33;
+        var reference = new int[width * height];
+        var changed = (int[])reference.Clone();
+        changed[changed.Length - 1] = unchecked((int)0xFF258451);
+        BitmapSource Frame(int[] pixels, int rows) =>
+            BitmapSource.Create(width, rows, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+
+        if (!LocalFiles.HaveSamePixels(Frame(reference, height), Frame((int[])reference.Clone(), height)) ||
+            LocalFiles.HaveSamePixels(Frame(reference, height), Frame(changed, height)) ||
+            LocalFiles.HaveSamePixels(Frame(reference, height), Frame(reference, height - 1)))
+            throw new InvalidOperationException("The frame freshness comparison missed a pixel or dimension change.");
+        Console.WriteLine("PASS identical rasters accepted, last pixel or crop dimension change rejected.");
+    }
+
+    private static void CheckElementMask()
+    {
+        const int width = 16;
+        const int height = 16;
+        var unchanged = unchecked((int)0xff313131);
+        var first = Enumerable.Repeat(unchanged, width * height).ToArray();
+        var second = (int[])first.Clone();
+        first[7] = unchecked((int)0xffff00ff);
+        second[7] = unchecked((int)0xff00ff00);
+        var red = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, first, width * 4);
+        var green = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, second, width * 4);
+        var editor = new MaskEditor();
+        editor.SetFrame(red);
+        editor.LoadMask(ElementMask.Extract(width, height, red, green));
+        if (!editor.HasSelection || GetMask(editor).Count(value => value == 255) != 1 || GetMask(editor)[7] != 255)
+            throw new InvalidOperationException("Selection mask did not retain the exact visible pixel.");
+        try
+        {
+            ElementMask.Extract(width, height, red, red);
+            throw new InvalidOperationException("An invisible selection must fail before submission.");
+        }
+        catch (RenderException error) when (error.Code == "element-hidden") { }
+        Console.WriteLine("PASS element mask extraction, editing and fully hidden selection rejection.");
     }
 
     private static BitmapSource SolidImage(int color) =>
