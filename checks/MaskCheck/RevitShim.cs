@@ -12,9 +12,9 @@ namespace RevitAiRender
 
     internal sealed class ViewList
     {
-        internal string Project => "";
-        internal ViewChoice[] Views => Array.Empty<ViewChoice>();
-        internal string? ActiveId => null;
+        internal string Project => "Mask check";
+        internal ViewChoice[] Views => new[] { new ViewChoice() };
+        internal string? ActiveId => "fixture";
     }
 
     internal sealed class ViewChoice

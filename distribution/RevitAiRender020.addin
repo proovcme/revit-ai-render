@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Application">
-    <Name>Revit AI Render 0.2.1</Name>
+    <Name>Revit AI Render 0.3.0</Name>
     <Assembly>RevitAiRender020.dll</Assembly>
     <AddInId>60DC57E9-DBE2-46E9-85B1-43C00D940D87</AddInId>
     <FullClassName>RevitAiRender.RevitAddin</FullClassName>

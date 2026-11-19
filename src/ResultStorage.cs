@@ -66,9 +66,9 @@ internal static class ResultStorage
     internal static readonly string LegacyRoot = Path.Combine(LocalFiles.LegacyRoot, "jobs");
     internal const int PixelArea = 1024 * 1024;
 
-    internal static RenderJob Create(ViewChoice view, string prompt, bool preserve, Settings settings, bool masked = false) => new()
+    internal static RenderJob Create(ViewChoice view, string prompt, bool preserve, Settings settings, bool masked = false, Guid? requestId = null) => new()
     {
-        Id = Guid.NewGuid().ToString("N"),
+        Id = (requestId ?? Guid.NewGuid()).ToString("N"),
         CreatedUtc = DateTime.UtcNow,
         Project = view.Project,
         View = view.Name,
@@ -90,7 +90,7 @@ internal static class ResultStorage
         CliPath = settings.SilicontrolPath
     };
 
-    internal static void Save(RenderJob job)
+    internal static void Save(RenderJob job, bool replaceExisting = true)
     {
         if (job.Legacy) throw new InvalidOperationException("Legacy history is read-only.");
         Directory.CreateDirectory(job.DirectoryPath);
@@ -98,7 +98,7 @@ internal static class ResultStorage
         var temporary = Path.Combine(job.DirectoryPath, "metadata-" + Guid.NewGuid().ToString("N") + ".json");
         using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             Json.Write(stream, job);
-        if (File.Exists(path))
+        if (replaceExisting && File.Exists(path))
             File.Replace(temporary, path, null);
         else
             File.Move(temporary, path);
@@ -116,6 +116,20 @@ internal static class ResultStorage
             !string.Equals(id.ToString("N"), Path.GetFileName(directory), StringComparison.Ordinal) ||
             job.CreatedUtc == default)
             throw new InvalidDataException("Invalid job metadata.");
+        return job;
+    }
+
+    internal static RenderJob? Find(Guid id)
+    {
+        var name = id.ToString("N");
+        var current = Path.Combine(Root, name);
+        if (File.Exists(Path.Combine(current, "job.json")))
+            return ReadJob(current);
+        var legacy = Path.Combine(LegacyRoot, name);
+        if (!File.Exists(Path.Combine(legacy, "job.json")))
+            return null;
+        var job = ReadJob(legacy);
+        job.Legacy = true;
         return job;
     }
 

@@ -12,3 +12,4 @@
 settings.json
 diagnostics.log
 /artifacts/
+__pycache__/

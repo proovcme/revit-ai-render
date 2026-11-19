@@ -23,6 +23,8 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
     private bool revitBusy;
     private bool updatingSelection;
     private bool jobBusy;
+    private string? activeJobId;
+    private volatile Tuple<string, JobProgress>? activeProgress;
     private bool resultLoading;
     private int resultRevision;
     private RenderJob? resultJob;
@@ -227,19 +229,81 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
             return;
         }
 
+        await RunGenerationAsync(view, prompt, PreserveBox.IsChecked == true, mask, source);
+    }
+
+    internal async Task<RenderJob> StartMcpAsync(McpRequest request, CancellationToken token)
+    {
+        var id = McpPipeServer.McpId(request.Id);
+        var prompt = request.Prompt;
+        if (prompt == null || string.IsNullOrWhiteSpace(prompt) || prompt.Length > 8000 || prompt.IndexOf('\0') >= 0)
+            throw new RenderException("prompt", "Укажите промпт длиной от 1 до 8000 символов.");
+        if (string.IsNullOrWhiteSpace(request.Project) || string.IsNullOrWhiteSpace(request.ProjectToken))
+            throw new RenderException("project-required", "Укажите название проекта из списка 3D-видов.");
+        if (string.IsNullOrWhiteSpace(request.ViewId))
+            throw new RenderException("view-required", "Укажите ID 3D-вида из списка Revit.");
+
+        var previous = await Task.Run(() => ResultStorage.Find(id), token);
+        if (previous != null)
+        {
+            if (previous.Legacy || previous.IsMasked || previous.ViewUniqueId != request.ViewId ||
+                previous.Project != request.Project || previous.PreserveGeometry != request.PreserveGeometry || previous.Prompt != prompt)
+                throw new RenderException("request-conflict", "Этот ID уже используется другой задачей.");
+            return previous;
+        }
+
+        token.ThrowIfCancellationRequested();
+        if (jobBusy || revitBusy)
+            throw new RenderException("render-busy", "Дождитесь текущей операции AI Render.");
+        SetRevitBusy(true);
+        try
+        {
+            var list = await views.ListAsync();
+            token.ThrowIfCancellationRequested();
+            if (list.Project != request.Project)
+                throw new RenderException("project-changed", "Активный проект сменился. Обновите список 3D-видов.");
+            var view = list.Views.FirstOrDefault(candidate => candidate.UniqueId == request.ViewId);
+            if (view == null)
+                throw new RenderException("view-missing", "Указанный 3D-вид не найден в активном проекте.");
+            if (McpPipeServer.ProjectToken(view) != request.ProjectToken)
+                throw new RenderException("project-changed", "Активный проект сменился. Обновите список 3D-видов.");
+
+            var accepted = new TaskCompletionSource<RenderJob>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = RunGenerationAsync(view, prompt!, request.PreserveGeometry, null, null, id, accepted);
+            return await accepted.Task;
+        }
+        finally
+        {
+            if (!jobBusy)
+                SetRevitBusy(false);
+        }
+    }
+
+    internal JobProgress? ReadMcpProgress(string jobId)
+    {
+        var snapshot = activeProgress;
+        return snapshot?.Item1 == jobId ? snapshot.Item2 : null;
+    }
+
+    private async Task RunGenerationAsync(ViewChoice view, string prompt, bool preserve, BitmapSource? mask,
+        string? source, Guid? requestId = null, TaskCompletionSource<RenderJob>? accepted = null)
+    {
         RenderJob? job = null;
+        var masked = mask != null;
         try
         {
             jobBusy = true;
             SetRevitBusy(true);
             UpdateProgress(new JobProgress(masked ? "Сохранение кадра и маски…" : "Экспорт выбранного вида Revit…"));
-            var keep = PreserveBox.IsChecked == true;
             job = await Task.Run(() =>
             {
-                var created = ResultStorage.Create(view, prompt, keep, Settings.Load(), masked);
-                ResultStorage.Save(created);
+                var created = ResultStorage.Create(view, prompt, preserve, Settings.Load(), masked, requestId);
+                ResultStorage.Save(created, replaceExisting: false);
                 return created;
             });
+            activeJobId = job.Id;
+            activeProgress = Tuple.Create(job.Id, new JobProgress("Экспорт выбранного вида Revit…"));
+            accepted?.TrySetResult(job);
             if (mask != null)
             {
                 await Task.Run(() =>
@@ -258,10 +322,11 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
             SetRevitBusy(false);
             await MonitorAsync(job, false);
         }
-        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { accepted?.TrySetCanceled(); }
         catch (Exception error)
         {
             var message = Describe(error, "generate", "Не удалось запустить задачу.");
+            accepted?.TrySetException(error as RenderException ?? new RenderException("start-failed", message));
             UpdateProgress(new JobProgress(message));
             if (job != null && !job.SubmissionAttempted)
             {
@@ -272,6 +337,8 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
         }
         finally
         {
+            activeJobId = null;
+            activeProgress = null;
             jobBusy = false;
             SetRevitBusy(false);
         }
@@ -336,6 +403,8 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
 
     private void UpdateProgress(JobProgress progress)
     {
+        if (activeJobId != null)
+            activeProgress = Tuple.Create(activeJobId, progress);
         JobStatus.Text = progress.Message;
         UpdateFooter();
         JobProgress.Visibility = progress.Fraction.HasValue ? Visibility.Visible : Visibility.Collapsed;

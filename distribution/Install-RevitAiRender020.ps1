@@ -3,6 +3,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('2024','2025')][string]$RevitYear,
     [switch]$Update,
+    [switch]$EnableMcp,
     [ValidatePattern('^(?:[a-zA-Z0-9._-]+@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$')][string]$SshTarget,
     [ValidatePattern('^/[^\r\n]+$')][string]$SilicontrolPath,
     [ValidatePattern('^/[^\r\n]+$')][string]$MfluxPython,
@@ -43,11 +44,17 @@ if (!(Test-Path -LiteralPath $settingsPath) -and $mfluxValues.Count -in @(1, 2))
     throw 'Provide -MfluxPython, -MfluxCli and -MfluxModel together to enable local edits.'
 }
 if (!(Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Plugin DLL not found: $binary" }
+$mcpBinary = Join-Path $PSScriptRoot 'mcp/RevitAiRender.Mcp.exe'
+if ($EnableMcp -and !(Test-Path -LiteralPath $mcpBinary -PathType Leaf)) { throw "MCP executable not found: $mcpBinary" }
 $installDirectory = Join-Path $root "installed/$RevitYear/$([guid]::NewGuid().ToString('N'))"
 [IO.Directory]::CreateDirectory($installDirectory) | Out-Null
 [IO.Directory]::CreateDirectory($addinDirectory) | Out-Null
 $dll = Join-Path $installDirectory 'RevitAiRender020.dll'
 [IO.File]::Copy($binary, $dll, $false)
+if ($EnableMcp) {
+    $mcpExe = Join-Path $installDirectory 'RevitAiRender.Mcp.exe'
+    [IO.File]::Copy($mcpBinary, $mcpExe, $false)
+}
 
 if (!(Test-Path -LiteralPath $settingsPath)) {
     $config = @{ sshTarget = $SshTarget; silicontrolPath = $SilicontrolPath }
@@ -74,5 +81,10 @@ if ($installed) {
     $stream = [IO.File]::Open($manifestPath, [IO.FileMode]::CreateNew)
     try { $manifest.Save($stream) } finally { $stream.Dispose() }
 }
-Write-Host "Installed Revit AI Render 0.2.1 for Revit $RevitYear"
+if ($EnableMcp) {
+    $marker = Join-Path $root 'mcp.enabled'
+    [IO.File]::Open($marker, [IO.FileMode]::OpenOrCreate).Dispose()
+    Write-Host "MCP executable: $mcpExe"
+}
+Write-Host "Installed Revit AI Render 0.3.0 for Revit $RevitYear"
 Write-Host $manifestPath

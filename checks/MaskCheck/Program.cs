@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -56,6 +57,21 @@ internal static class Program
         if (editor.HasSelection)
             throw new InvalidOperationException("Clear did not reset selection.");
         Console.WriteLine("PASS WPF panel modes, rectangle, brush, eraser, clear, letterbox, 200% zoom, panel resize, binary PNG pixels.");
+        if (args.Length == 1 && args[0] == "--mcp-fixture")
+        {
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            var fixtureViews = new RevitViewService();
+            using var gateway = new McpPipeServer(new RenderPanel(fixtureViews), fixtureViews);
+            Console.WriteLine($"READY {Process.GetCurrentProcess().Id}");
+            using var stop = new System.Threading.Timer(_ =>
+            {
+                if (Debugger.IsAttached)
+                    return;
+                app.Dispatcher.BeginInvoke(new Action(app.Shutdown));
+            }, null, TimeSpan.FromSeconds(90), System.Threading.Timeout.InfiniteTimeSpan);
+            app.Run();
+            return;
+        }
         CheckResultViewport();
         CheckMfluxSettings();
         if (args.Length == 2 && (args[0] == "--saved-result" || args[0] == "--preview"))

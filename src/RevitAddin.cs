@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -15,6 +16,7 @@ public sealed class RevitAddin : IExternalApplication
     internal static readonly DockablePaneId PaneId = new(new Guid("299525f7-989d-41de-a7ca-d84d30f1bf41"));
     internal static RenderPanel? Panel { get; private set; }
     private RevitViewService? views;
+    private McpPipeServer? mcp;
 
     public Result OnStartup(UIControlledApplication application)
     {
@@ -31,7 +33,9 @@ public sealed class RevitAddin : IExternalApplication
             AddButton<ShowHistoryPanel>(ribbon, "История", "Открыть сохранённые задачи и параметры", "history");
             application.ViewActivated += OnViewActivated;
             application.ControlledApplication.DocumentClosed += OnDocumentClosed;
-            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.2.1");
+            if (File.Exists(Path.Combine(LocalFiles.Root, "mcp.enabled")))
+                mcp = new McpPipeServer(Panel, views);
+            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.3.0");
             return Result.Succeeded;
         }
         catch (Exception error)
@@ -45,6 +49,7 @@ public sealed class RevitAddin : IExternalApplication
     {
         application.ViewActivated -= OnViewActivated;
         application.ControlledApplication.DocumentClosed -= OnDocumentClosed;
+        mcp?.Dispose();
         Panel?.StopMonitoring();
         Panel = null;
         views?.Dispose();
