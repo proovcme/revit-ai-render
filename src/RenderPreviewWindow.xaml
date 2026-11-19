@@ -1,0 +1,27 @@
+<Window x:Class="RevitAiRender.RenderPreviewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:RevitAiRender"
+    Title="Рендер — AI Render" Width="930" Height="660" MinWidth="420" MinHeight="340"
+    ShowInTaskbar="False" WindowStartupLocation="CenterOwner" FontFamily="Segoe UI" FontSize="14">
+    <Window.Resources>
+        <ResourceDictionary Source="RenderTheme.xaml"/>
+    </Window.Resources>
+    <DockPanel LastChildFill="True" Background="{StaticResource PanelSurface}" Margin="0">
+        <Border DockPanel.Dock="Top" Background="{StaticResource CardSurface}" Padding="20,13"
+                BorderBrush="{StaticResource SubtleStroke}" BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right" Content="Сохранить PNG" Style="{StaticResource PrimaryAction}"
+                        Margin="16,0,0,0" VerticalAlignment="Center" Click="SaveClicked"/>
+                <StackPanel>
+                    <TextBlock x:Name="ViewTitle" Style="{StaticResource SectionTitle}" FontSize="19"/>
+                    <TextBlock x:Name="RenderDetails" Style="{StaticResource SubtleText}" Margin="0,4,0,0"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <TextBlock x:Name="Feedback" DockPanel.Dock="Bottom" Style="{StaticResource SubtleText}" Margin="20,0,20,12"
+                   TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+        <local:ResultViewport x:Name="Viewer" Margin="20,16"/>
+    </DockPanel>
+</Window>

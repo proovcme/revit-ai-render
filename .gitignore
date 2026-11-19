@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+*.zip
+*.dll
+*.pdb
+*.rvt
+*.rfa
+*.rte
+settings.json
+diagnostics.log
+/artifacts/

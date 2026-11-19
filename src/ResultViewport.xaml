@@ -1,0 +1,38 @@
+<UserControl x:Class="RevitAiRender.ResultViewport"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary Source="RenderTheme.xaml"/>
+    </UserControl.Resources>
+    <DockPanel LastChildFill="True">
+        <StackPanel x:Name="ComparisonTools" DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="Collapsed">
+            <CheckBox x:Name="CompareToggle" Content="Сравнить с исходником" Padding="4,0"
+                      Checked="ComparisonToggled" Unchecked="ComparisonToggled"/>
+            <StackPanel x:Name="SplitTools" Visibility="Collapsed" Margin="0,4,0,0">
+                <DockPanel LastChildFill="True">
+                    <TextBlock Text="Исходник" DockPanel.Dock="Left" Style="{StaticResource SubtleText}"/>
+                    <TextBlock Text="Рендер" HorizontalAlignment="Right" Style="{StaticResource SubtleText}"/>
+                </DockPanel>
+                <Slider x:Name="CompareSlider" Minimum="0" Maximum="100" Value="50" SmallChange="5"
+                        LargeChange="20" ValueChanged="SliderChanged"
+                        AutomationProperties.Name="Граница между исходником и рендером"/>
+            </StackPanel>
+        </StackPanel>
+        <Border x:Name="StageBorder" Background="{StaticResource ImageSurface}" BorderBrush="{StaticResource SubtleStroke}"
+                BorderThickness="1" CornerRadius="4">
+            <Grid x:Name="Stage" ClipToBounds="True" SizeChanged="StageResized">
+                <TextBlock x:Name="EmptyText" Text="Рендер появится здесь после генерации"
+                           Style="{StaticResource SubtleText}" TextWrapping="Wrap" TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12"/>
+                <Image x:Name="BeforeImage" Stretch="Uniform" Visibility="Hidden"
+                       AutomationProperties.Name="Исходный кадр Revit"/>
+                <Grid x:Name="AfterLayer">
+                    <Image x:Name="AfterImage" Stretch="Uniform" AutomationProperties.Name="Готовый рендер"/>
+                </Grid>
+                <Canvas IsHitTestVisible="False">
+                    <Border x:Name="Divider" Width="2" Background="White" Visibility="Collapsed"/>
+                </Canvas>
+            </Grid>
+        </Border>
+    </DockPanel>
+</UserControl>

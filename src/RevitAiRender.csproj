@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>RevitAiRender020</AssemblyName>
+    <Version>0.2.1</Version>
+    <RootNamespace>RevitAiRender</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RevitYear Condition="'$(TargetFramework)' == 'net48'">2024</RevitYear>
+    <RevitYear Condition="'$(TargetFramework)' == 'net8.0-windows'">2025</RevitYear>
+    <RevitDirectory Condition="'$(RevitDirectory)' == ''">C:\Program Files\Autodesk\Revit $(RevitYear)</RevitDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="mflux-worker.py" LogicalName="RevitAiRender.mflux-worker.py" />
+    <EmbeddedResource Include="mflux-control.sh" LogicalName="RevitAiRender.mflux-control.sh" />
+    <EmbeddedResource Include="bridge.sh" LogicalName="RevitAiRender.bridge.sh" />
+    <Reference Include="RevitAPI" HintPath="$(RevitDirectory)\RevitAPI.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="RevitAPIUI" HintPath="$(RevitDirectory)\RevitAPIUI.dll" Private="false" ExternallyResolved="true" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+</Project>

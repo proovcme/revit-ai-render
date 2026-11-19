@@ -1,0 +1,172 @@
+<UserControl x:Class="RevitAiRender.RenderPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:local="clr-namespace:RevitAiRender"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{DynamicResource PanelSurface}" Foreground="{DynamicResource PanelText}"
+    FontFamily="Segoe UI" FontSize="13">
+    <UserControl.Resources>
+        <ResourceDictionary Source="RenderTheme.xaml"/>
+    </UserControl.Resources>
+    <DockPanel>
+        <Border x:Name="StatusFooter" DockPanel.Dock="Bottom" Padding="12,8"
+                Background="{StaticResource CardSurface}" BorderThickness="0,1,0,0"
+                BorderBrush="{StaticResource SubtleStroke}">
+            <StackPanel>
+                <TextBlock x:Name="JobStatus" Style="{StaticResource SubtleText}" TextWrapping="Wrap"
+                    AutomationProperties.LiveSetting="Polite" Visibility="Collapsed"/>
+                <ProgressBar x:Name="JobProgress" Margin="0,5,0,0" Height="4" Foreground="{StaticResource Accent}"
+                    Minimum="0" Maximum="1" Visibility="Collapsed" AutomationProperties.Name="Ход генерации"/>
+                <Button x:Name="CancelButton" Content="Отменить задачу" Click="Cancel"
+                    Style="{StaticResource Action}" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed"/>
+                <Button x:Name="GenerateButton" Content="Генерировать" Click="Generate" Style="{StaticResource PrimaryAction}"/>
+            </StackPanel>
+        </Border>
+
+        <TabControl x:Name="Tabs" Style="{StaticResource PanelTabs}" SelectionChanged="TabChanged">
+            <TabItem x:Name="NewTab" Header="Кадр" Style="{StaticResource TabItemStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="12,12,12,10">
+                        <DockPanel Margin="0,0,0,6">
+                            <TextBlock Text="3D-вид" FontWeight="SemiBold" DockPanel.Dock="Left" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="ProjectText" Style="{StaticResource SubtleText}"
+                                TextAlignment="Right" TextTrimming="CharacterEllipsis"
+                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                        </DockPanel>
+                        <ComboBox x:Name="Views" DisplayMemberPath="Label" Style="{StaticResource Field}"
+                            AutomationProperties.Name="3D-вид" SelectionChanged="ViewChanged"/>
+                        <UniformGrid Columns="2" Margin="0,5,0,10">
+                            <Button x:Name="ActiveButton" Content="Активный" Click="UseActive"
+                                ToolTip="Выбрать активный 3D-вид Revit" AutomationProperties.Name="Выбрать активный 3D-вид"
+                                Padding="5,4" Style="{StaticResource Action}" Margin="0,0,3,0"/>
+                            <Button x:Name="PreviewButton" Content="Обновить" Click="RefreshPreview"
+                                ToolTip="Заново экспортировать выбранный вид" Padding="5,4" Style="{StaticResource Action}" Margin="3,0,0,0"/>
+                        </UniformGrid>
+                        <ComboBox x:Name="ModeBox" Margin="0,0,0,6" SelectedIndex="0" Style="{StaticResource Field}"
+                                  SelectionChanged="ModeChanged" AutomationProperties.Name="Режим редактирования">
+                            <ComboBoxItem Content="Полный кадр"/>
+                            <ComboBoxItem Content="Маска"/>
+                        </ComboBox>
+                        <StackPanel x:Name="MaskTools" Visibility="Collapsed">
+                            <WrapPanel>
+                                <ComboBox x:Name="MaskToolBox" MinWidth="110" SelectedIndex="0" Style="{StaticResource Field}"
+                                          SelectionChanged="MaskToolChanged" AutomationProperties.Name="Инструмент маски"
+                                          Margin="0,0,5,4">
+                                    <ComboBoxItem Content="Кисть"/>
+                                    <ComboBoxItem Content="Ластик"/>
+                                    <ComboBoxItem Content="Прямоугольник"/>
+                                </ComboBox>
+                                <Button x:Name="ClearMaskButton" Content="Очистить" Click="ClearMask"
+                                    ToolTip="Очистить маску" Style="{StaticResource Action}" Margin="0,0,0,4"/>
+                            </WrapPanel>
+                            <WrapPanel Margin="0,0,0,3">
+                                <ComboBox x:Name="MaskSizeBox" MinWidth="76" SelectedIndex="1" Style="{StaticResource Field}"
+                                          SelectionChanged="MaskSizeChanged" AutomationProperties.Name="Диаметр кисти"
+                                          ToolTip="Диаметр кисти или ластика в пикселях кадра" Margin="0,0,5,4">
+                                    <ComboBoxItem Content="16 пкс"/>
+                                    <ComboBoxItem Content="40 пкс"/>
+                                    <ComboBoxItem Content="88 пкс"/>
+                                </ComboBox>
+                                <ComboBox x:Name="ZoomBox" MinWidth="68" SelectedIndex="0" Style="{StaticResource Field}"
+                                          SelectionChanged="ZoomChanged" AutomationProperties.Name="Масштаб кадра"
+                                          ToolTip="Перемещайте увеличенный кадр правой кнопкой мыши" Margin="0,0,0,4">
+                                    <ComboBoxItem Content="100%"/>
+                                    <ComboBoxItem Content="150%"/>
+                                    <ComboBoxItem Content="200%"/>
+                                    <ComboBoxItem Content="300%"/>
+                                </ComboBox>
+                            </WrapPanel>
+                        </StackPanel>
+                        <Border x:Name="PreviewFrame" Height="150" CornerRadius="4" BorderThickness="1"
+                            BorderBrush="{StaticResource SubtleStroke}" Background="{StaticResource ImageSurface}" ClipToBounds="True">
+                            <Grid>
+                                <TextBlock x:Name="PreviewEmpty" Text="Предпросмотр вида" Style="{StaticResource SubtleText}"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                <Image x:Name="PreviewImage" Stretch="Uniform" AutomationProperties.Name="Предпросмотр Revit"/>
+                                <local:MaskEditor x:Name="MaskCanvas" Visibility="Collapsed"
+                                    AutomationProperties.Name="Область редактирования маски"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock x:Name="PreviewStatus" Margin="0,5,0,0" TextWrapping="Wrap"
+                            Style="{StaticResource SubtleText}" AutomationProperties.LiveSetting="Polite" Visibility="Collapsed"/>
+                        <TextBlock x:Name="MaskHint" Text="Отметьте участок, который нужно изменить." Style="{StaticResource SubtleText}"
+                            Visibility="Collapsed" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                        <TextBlock Text="Промпт" FontWeight="SemiBold" Margin="0,12,0,5"/>
+                        <TextBox x:Name="PromptBox" MinHeight="76" MaxHeight="144" Padding="7"
+                            Background="{StaticResource CardSurface}" BorderBrush="{StaticResource SubtleStroke}"
+                            Foreground="{StaticResource PanelText}" AcceptsReturn="True" TextWrapping="Wrap"
+                            VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Промпт" TextChanged="PromptChanged"/>
+                        <CheckBox x:Name="PreserveBox" Content="Сохранять геометрию" IsChecked="True" Margin="0,8,0,2"
+                            ToolTip="Добавляет просьбу сохранить геометрию в промпт. Qwen может изменить детали."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="ResultTab" Header="Результат" Style="{StaticResource TabItemStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="12">
+                        <StackPanel x:Name="ResultHeading" Margin="0,0,0,8" Visibility="Collapsed">
+                            <TextBlock x:Name="ResultTitle" Style="{StaticResource SectionTitle}"
+                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                            <TextBlock x:Name="ResultProject" Style="{StaticResource SubtleText}"
+                                TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                        </StackPanel>
+                        <local:ResultViewport x:Name="ResultViewer" Compact="True"/>
+                        <StackPanel x:Name="ResultActions" Margin="0,8,0,0" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Content="Крупно" Click="OpenLarge" Style="{StaticResource Action}" Padding="5,4"
+                                    Margin="0,0,6,0" ToolTip="Открыть рендер в отдельном окне Revit"/>
+                                <Button Grid.Column="1" Click="SavePng" Style="{StaticResource PrimaryAction}"
+                                    AutomationProperties.Name="Сохранить PNG" Padding="5,4" FontSize="12">
+                                    <TextBlock Text="Сохранить PNG" TextWrapping="Wrap" TextAlignment="Center"/>
+                                </Button>
+                            </Grid>
+                            <TextBlock x:Name="ResultFeedback" Style="{StaticResource SubtleText}" TextWrapping="Wrap"
+                                Margin="0,5,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="HistoryTab" Header="История" Style="{StaticResource TabItemStyle}">
+                <DockPanel Margin="12">
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <TextBlock x:Name="HistoryStatus" Text="История пока пуста" Style="{StaticResource SubtleText}"
+                            TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <Button x:Name="OpenSelectedButton" Content="Открыть рендер" Click="OpenSelected"
+                            Style="{StaticResource PrimaryAction}" Visibility="Collapsed"/>
+                        <Button x:Name="ResumeButton" Content="Проверить задачу" Click="Resume"
+                            Style="{StaticResource Action}" Visibility="Collapsed"/>
+                        <Expander x:Name="HistoryDetails" Header="Промпт и параметры" Margin="0,8,0,0" Visibility="Collapsed">
+                            <StackPanel Margin="0,5,0,0">
+                                <TextBlock x:Name="Parameters" Style="{StaticResource SubtleText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                <TextBox x:Name="HistoryPrompt" IsReadOnly="True" TextWrapping="Wrap" Padding="6"
+                                    MaxHeight="91" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Промпт сохранённой задачи"/>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                    <ListBox x:Name="HistoryBox" SelectionChanged="HistoryChanged" AutomationProperties.Name="Сохранённые задачи"
+                        Background="{StaticResource CardSurface}" BorderBrush="{StaticResource SubtleStroke}"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="OpenSelected">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="6,5" ToolTip="{Binding Label}">
+                                    <TextBlock Text="{Binding View}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding HistorySubtitle}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

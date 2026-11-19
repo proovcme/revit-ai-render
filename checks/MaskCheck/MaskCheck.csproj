@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/MaskEditor.cs;../../src/ResultViewport.xaml.cs;../../src/RenderPreviewWindow.xaml.cs;../../src/RenderPanel.xaml.cs;../../src/Infrastructure.cs;../../src/Settings.cs;../../src/ResultStorage.cs;../../src/MacBridge.cs;../../src/SiliconedProtocol.cs;../../src/RenderJobService.cs;../../src/SiliconedBackend.cs;../../src/MfluxBackend.cs" />
+    <Page Include="../../src/RenderPanel.xaml" Link="RenderPanel.xaml" />
+    <Page Include="../../src/RenderTheme.xaml" Link="RenderTheme.xaml" />
+    <Page Include="../../src/ResultViewport.xaml" Link="ResultViewport.xaml" />
+    <Page Include="../../src/RenderPreviewWindow.xaml" Link="RenderPreviewWindow.xaml" />
+  </ItemGroup>
+</Project>
