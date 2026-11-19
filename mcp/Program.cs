@@ -17,7 +17,7 @@ var builder = Host.CreateEmptyApplicationBuilder(settings: null);
 builder.Services.AddSingleton(new RenderConnection(pid));
 builder.Services.AddMcpServer(options =>
     {
-        options.ServerInfo = new() { Name = "Revit AI Render", Version = "0.3.0" };
+        options.ServerInfo = new() { Name = "Revit AI Render", Version = "0.3.1" };
         options.ServerInstructions = "Рабочий процесс: render_views, start_render, render_status, get_render. Готовые кадры доступны через list_renders. Используйте один и тот же requestId при повторной проверке неопределённого запуска.";
     })
     .WithStdioServerTransport()

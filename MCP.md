@@ -10,7 +10,7 @@ MCP связывает Codex и работающую надстройку AI Ren
 .\Install-RevitAiRender020.ps1 -RevitYear 2024 -Update -EnableMcp
 ```
 
-При первой установке вместо `-Update` задайте `-SshTarget 'render-mac'`. Установщик выведет путь к `RevitAiRender.Mcp.exe`. Для запуска этого файла нужен .NET 8 Runtime x64.
+При первой установке опустите `-Update` и настройте SSH в Revit через **AI Render → Подключение**. Установщик выведет путь к `RevitAiRender.Mcp.exe`. Для запуска этого файла нужен .NET 8 Runtime x64.
 
 ```powershell
 codex mcp add revit-ai-render -- 'C:\путь\из\установщика\RevitAiRender.Mcp.exe'

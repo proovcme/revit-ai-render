@@ -23,7 +23,7 @@
         </Border>
 
         <TabControl x:Name="Tabs" Style="{StaticResource PanelTabs}" SelectionChanged="TabChanged">
-            <TabItem x:Name="NewTab" Header="Кадр" Style="{StaticResource TabItemStyle}">
+            <TabItem x:Name="NewTab" Header="Рендер" Style="{StaticResource TabItemStyle}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="12,12,12,10">
                         <DockPanel Margin="0,0,0,6">
@@ -41,11 +41,9 @@
                             <Button x:Name="PreviewButton" Content="Обновить" Click="RefreshPreview"
                                 ToolTip="Заново экспортировать выбранный вид" Padding="5,4" Style="{StaticResource Action}" Margin="3,0,0,0"/>
                         </UniformGrid>
-                        <ComboBox x:Name="ModeBox" Margin="0,0,0,6" SelectedIndex="0" Style="{StaticResource Field}"
-                                  SelectionChanged="ModeChanged" AutomationProperties.Name="Режим редактирования">
-                            <ComboBoxItem Content="Полный кадр"/>
-                            <ComboBoxItem Content="Маска"/>
-                        </ComboBox>
+                        <CheckBox x:Name="MaskedMode" Content="Правка по маске" Margin="0,0,0,8"
+                            Checked="ModeChanged" Unchecked="ModeChanged"
+                            ToolTip="Выделить участок кадра. При выключенном флажке обрабатывается весь кадр."/>
                         <StackPanel x:Name="MaskTools" Visibility="Collapsed">
                             <WrapPanel>
                                 <ComboBox x:Name="MaskToolBox" MinWidth="110" SelectedIndex="0" Style="{StaticResource Field}"

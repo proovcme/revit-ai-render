@@ -13,6 +13,8 @@ using Microsoft.Win32;
 
 namespace RevitAiRender;
 
+internal enum RenderSection { Render, Result, History }
+
 public partial class RenderPanel : UserControl, IDockablePaneProvider
 {
     private readonly RevitViewService views;
@@ -34,7 +36,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
     internal IntPtr HostWindow { private get; set; }
     private string? previewPath;
     private ViewChoice? previewView;
-    private bool IsMasked => ModeBox?.SelectedIndex == 1;
+    private bool IsMasked => MaskedMode?.IsChecked == true;
 
     internal RenderPanel(RevitViewService views)
     {
@@ -58,22 +60,19 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
         data.InitialState = new DockablePaneState { DockPosition = DockPosition.Right };
     }
 
-    internal void OpenSection(int section)
+    internal void OpenSection(RenderSection section)
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (section == 3)
+            if (section == RenderSection.Result)
                 Tabs.SelectedItem = ResultTab;
-            else if (section == 2)
+            else if (section == RenderSection.History)
             {
                 Tabs.SelectedItem = HistoryTab;
                 _ = RefreshHistoryAsync();
             }
             else
-            {
                 Tabs.SelectedItem = NewTab;
-                ModeBox.SelectedIndex = section;
-            }
             ScheduleRefresh();
         }));
     }
@@ -151,7 +150,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
     private async void UseActive(object sender, RoutedEventArgs args) => await SyncViewsAsync(selectActive: true, forcePreview: true);
     private void PromptChanged(object sender, TextChangedEventArgs args) => UpdateControls();
 
-    private void ModeChanged(object sender, SelectionChangedEventArgs args)
+    private void ModeChanged(object sender, RoutedEventArgs args)
     {
         if (MaskCanvas == null || MaskTools == null || PreviewFrame == null || MaskHint == null)
             return;
@@ -638,7 +637,7 @@ public partial class RenderPanel : UserControl, IDockablePaneProvider
         MaskTools.Visibility = MaskCanvas.Visibility = local ? Visibility.Visible : Visibility.Collapsed;
         PreviewImage.Visibility = local ? Visibility.Hidden : Visibility.Visible;
         PreviewFrame.Height = local ? 230 : 150;
-        ModeBox.IsEnabled = !revitBusy;
+        MaskedMode.IsEnabled = !revitBusy && !jobBusy;
         MaskCanvas.IsEnabled = !revitBusy && !jobBusy;
         MaskToolBox.IsEnabled = ZoomBox.IsEnabled = !revitBusy && !jobBusy;
         MaskSizeBox.IsEnabled = !revitBusy && !jobBusy && MaskToolBox.SelectedIndex != 2;

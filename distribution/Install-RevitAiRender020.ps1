@@ -35,13 +35,12 @@ if ($installed) {
         throw "The existing manifest does not belong to AI Render 0.2."
     }
 }
-if (!(Test-Path -LiteralPath $settingsPath) -and
-    $SshTarget -notmatch '^(?:[a-zA-Z0-9._-]+@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$') {
-    throw 'Provide -SshTarget as a configured SSH alias or user@host.'
-}
 $mfluxValues = @($MfluxPython, $MfluxCli, $MfluxModel) | Where-Object { $_ }
 if (!(Test-Path -LiteralPath $settingsPath) -and $mfluxValues.Count -in @(1, 2)) {
     throw 'Provide -MfluxPython, -MfluxCli and -MfluxModel together to enable local edits.'
+}
+if (!(Test-Path -LiteralPath $settingsPath) -and !$SshTarget -and $mfluxValues.Count -gt 0) {
+    throw 'Provide -SshTarget with the MFLUX paths, or configure the connection in Revit.'
 }
 if (!(Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Plugin DLL not found: $binary" }
 $mcpBinary = Join-Path $PSScriptRoot 'mcp/RevitAiRender.Mcp.exe'
@@ -56,7 +55,7 @@ if ($EnableMcp) {
     [IO.File]::Copy($mcpBinary, $mcpExe, $false)
 }
 
-if (!(Test-Path -LiteralPath $settingsPath)) {
+if (!(Test-Path -LiteralPath $settingsPath) -and $SshTarget) {
     $config = @{ sshTarget = $SshTarget; silicontrolPath = $SilicontrolPath }
     if ($mfluxValues.Count -eq 3) {
         $config.mfluxPython = $MfluxPython
@@ -69,7 +68,7 @@ if (!(Test-Path -LiteralPath $settingsPath)) {
     try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
 }
 
-$manifest.RevitAddIns.AddIn.Assembly = $dll
+$manifest.SelectSingleNode('/RevitAddIns/AddIn/Assembly').InnerText = [string]$dll
 if ($installed) {
     $staged = Join-Path $installDirectory 'RevitAiRender020.pending'
     $backup = Join-Path $installDirectory 'RevitAiRender020.previous.addin'
@@ -86,5 +85,5 @@ if ($EnableMcp) {
     [IO.File]::Open($marker, [IO.FileMode]::OpenOrCreate).Dispose()
     Write-Host "MCP executable: $mcpExe"
 }
-Write-Host "Installed Revit AI Render 0.3.0 for Revit $RevitYear"
+Write-Host "Installed Revit AI Render 0.3.1 for Revit $RevitYear"
 Write-Host $manifestPath

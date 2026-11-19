@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.Attributes;
@@ -24,18 +25,18 @@ public sealed class RevitAddin : IExternalApplication
         {
             views = new RevitViewService();
             Panel = new RenderPanel(views) { HostWindow = application.MainWindowHandle };
-            application.RegisterDockablePane(PaneId, "AI Render 0.2", Panel);
+            application.RegisterDockablePane(PaneId, "AI Render", Panel);
             application.CreateRibbonTab("AI Render");
             var ribbon = application.CreateRibbonPanel("AI Render", "Визуализация");
-            AddButton<ShowRenderPanel>(ribbon, "Кадр", "Редактировать полный кадр через Siliconed", "frame");
-            AddButton<ShowMaskPanel>(ribbon, "Маска", "Выделить область для редактирования через MFLUX", "mask");
+            AddButton<ShowRenderPanel>(ribbon, "Новый\nрендер", "Создать рендер целиком или отредактировать участок по маске", "frame");
             AddButton<ShowResultPanel>(ribbon, "Результат", "Показать последний готовый рендер", "result");
             AddButton<ShowHistoryPanel>(ribbon, "История", "Открыть сохранённые задачи и параметры", "history");
+            AddButton<ShowConnectionSettings>(ribbon, "Подключение", "Настройки SSH, Siliconed и MFLUX", "connection");
             application.ViewActivated += OnViewActivated;
             application.ControlledApplication.DocumentClosed += OnDocumentClosed;
             if (File.Exists(Path.Combine(LocalFiles.Root, "mcp.enabled")))
                 mcp = new McpPipeServer(Panel, views);
-            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.3.0");
+            Diagnostics.Write("addin-started", application.ControlledApplication.VersionNumber + " 0.3.1");
             return Result.Succeeded;
         }
         catch (Exception error)
@@ -56,7 +57,7 @@ public sealed class RevitAddin : IExternalApplication
         return Result.Succeeded;
     }
 
-    internal static Result Show(ExternalCommandData data, int section, ref string message)
+    internal static Result Show(ExternalCommandData data, RenderSection section, ref string message)
     {
         try
         {
@@ -104,9 +105,8 @@ public sealed class RevitAddin : IExternalApplication
                     context.DrawGeometry(null, pen, Geometry.Parse("M 8 22 L 13 16 L 17 20 L 21 15 L 25 20"));
                     context.DrawEllipse(pale, null, new System.Windows.Point(12, 12), 1.5, 1.5);
                     break;
-                case "mask":
-                    context.DrawRoundedRectangle(null, pen, new Rect(6.5, 7, 19, 18), 2, 2);
-                    context.DrawRectangle(pale, null, new Rect(11, 11, 10, 10));
+                case "connection":
+                    context.DrawGeometry(null, pen, Geometry.Parse("M 10 13 L 10 8 M 16 13 L 16 8 M 7 13 L 19 13 L 19 16 C 19 20 16 22 13 22 C 10 22 7 20 7 16 Z M 13 22 L 13 26 L 22 26 L 22 20"));
                     break;
                 case "result":
                     context.DrawRoundedRectangle(null, pen, new Rect(6.5, 7.5, 19, 17), 2, 2);
@@ -135,26 +135,45 @@ public sealed class RevitAddin : IExternalApplication
 public sealed class ShowRenderPanel : IExternalCommand
 {
     public Result Execute(ExternalCommandData data, ref string message, ElementSet elements) =>
-        RevitAddin.Show(data, 0, ref message);
+        RevitAddin.Show(data, RenderSection.Render, ref message);
 }
 
 [Transaction(TransactionMode.ReadOnly)]
-public sealed class ShowMaskPanel : IExternalCommand
+public sealed class ShowConnectionSettings : IExternalCommand
 {
-    public Result Execute(ExternalCommandData data, ref string message, ElementSet elements) =>
-        RevitAddin.Show(data, 1, ref message);
+    public Result Execute(ExternalCommandData data, ref string message, ElementSet elements)
+    {
+        try
+        {
+            var dialog = new ConnectionWindow(Settings.ReadForEditing());
+            new WindowInteropHelper(dialog).Owner = data.Application.MainWindowHandle;
+            dialog.ShowDialog();
+            return Result.Succeeded;
+        }
+        catch (RenderException error)
+        {
+            TaskDialog.Show("Подключение AI Render", error.Message);
+            return Result.Cancelled;
+        }
+        catch (Exception error)
+        {
+            Diagnostics.Exception("connection-window", error);
+            message = "Не удалось открыть настройки подключения AI Render.";
+            return Result.Failed;
+        }
+    }
 }
 
 [Transaction(TransactionMode.ReadOnly)]
 public sealed class ShowResultPanel : IExternalCommand
 {
     public Result Execute(ExternalCommandData data, ref string message, ElementSet elements) =>
-        RevitAddin.Show(data, 3, ref message);
+        RevitAddin.Show(data, RenderSection.Result, ref message);
 }
 
 [Transaction(TransactionMode.ReadOnly)]
 public sealed class ShowHistoryPanel : IExternalCommand
 {
     public Result Execute(ExternalCommandData data, ref string message, ElementSet elements) =>
-        RevitAddin.Show(data, 2, ref message);
+        RevitAddin.Show(data, RenderSection.History, ref message);
 }

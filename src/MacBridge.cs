@@ -184,7 +184,42 @@ internal sealed class MacBridge
         return result;
     }
 
-    private async Task<CommandResult> RunAsync(string program, string args, string? input, TimeSpan timeout, CancellationToken token)
+    internal static async Task<string> CheckConnectionAsync(Settings settings, CancellationToken token)
+    {
+        settings.ValidateConnection(requireCompleteMflux: true);
+        var target = Settings.ValidateTarget(settings.SshTarget);
+        var testMflux = settings.MfluxPython != null;
+        // .NET Framework can write a UTF-8 preamble to redirected standard input.
+        var remote = "IFS= read -r header && IFS= read -r cli && [ -x \"$cli\" ] || exit 10; ";
+        var input = "paths\n" + settings.SilicontrolPath! + "\n";
+        if (testMflux)
+        {
+            remote += "IFS= read -r python && IFS= read -r mflux && IFS= read -r model && "
+                + "[ -x \"$python\" ] && [ -x \"$mflux\" ] && [ -d \"$model\" ] || exit 11; ";
+            input += settings.MfluxPython + "\n" + settings.MfluxCli + "\n" + settings.MfluxModelPath + "\n";
+        }
+        remote += "exec \"$cli\" status";
+        var result = await RunTransportAsync("ssh", "-T " + Quote(target) + " " + Quote(remote),
+            input, Path.GetTempPath(), "connection-check", TimeSpan.FromSeconds(20), token).ConfigureAwait(false);
+        if (result.Code == 255)
+            ThrowConnectionError(result.Error, true);
+        if (result.Code == 10)
+            throw BridgeErrors.For("cli_missing");
+        if (result.Code == 11)
+            throw new RenderException("mflux-path", "SSH работает. Проверьте пути к Python, MFLUX и модели на Mac.");
+        var status = CliMessage.ReadLines(result.Output).LastOrDefault();
+        if (status?.Error != null)
+            throw BridgeErrors.For(status.Error);
+        if (result.Code != 0 || status?.Ok != true)
+            throw new RenderException("connection-status", "Siliconed не подтвердил готовность. Проверьте приложение на Mac.");
+        return testMflux ? "SSH и Siliconed доступны. Пути MFLUX найдены." : "SSH и Siliconed доступны.";
+    }
+
+    private Task<CommandResult> RunAsync(string program, string args, string? input, TimeSpan timeout, CancellationToken token) =>
+        RunTransportAsync(program, args, input, job.DirectoryPath, "job=" + job.Id, timeout, token);
+
+    private static async Task<CommandResult> RunTransportAsync(string program, string args, string? input,
+        string workingDirectory, string diagnosticLabel, TimeSpan timeout, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", program + ".exe");
@@ -198,7 +233,7 @@ internal sealed class MacBridge
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = job.DirectoryPath,
+                WorkingDirectory = workingDirectory,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -248,7 +283,7 @@ internal sealed class MacBridge
         token.ThrowIfCancellationRequested();
         if (stop.IsCancellationRequested)
             throw new RenderException("ssh-timeout", "Mac не ответил вовремя. Проверьте ZeroTier и SSH.");
-        Diagnostics.Write("transport", $"job={job.Id} tool={program} exit={process.ExitCode}");
+        Diagnostics.Write("transport", $"{diagnosticLabel} tool={program} exit={process.ExitCode}");
         return new CommandResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }
 

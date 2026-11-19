@@ -16,18 +16,18 @@ internal static class Program
     private static void Main(string[] args)
     {
         var panel = new RenderPanel(new RevitViewService());
-        var mode = (System.Windows.Controls.ComboBox)panel.FindName("ModeBox");
+        var mode = (CheckBox)panel.FindName("MaskedMode");
         var editor = (MaskEditor)panel.FindName("MaskCanvas");
         if (editor.Visibility != Visibility.Collapsed)
             throw new InvalidOperationException("Mask canvas unexpectedly shown in the full-frame mode.");
-        mode.SelectedIndex = 1;
+        mode.IsChecked = true;
         if (editor.Visibility != Visibility.Visible)
             throw new InvalidOperationException("Mask canvas missing in the local mode.");
         var tool = (System.Windows.Controls.ComboBox)panel.FindName("MaskToolBox");
         tool.SelectedIndex = 2;
         if (editor.Tool != MaskTool.Rectangle)
             throw new InvalidOperationException("The mask tool selector did not update the editor.");
-        mode.SelectedIndex = 0;
+        mode.IsChecked = false;
         if (editor.Visibility != Visibility.Collapsed)
             throw new InvalidOperationException("Mode change did not hide the mask canvas.");
         editor = new MaskEditor();
@@ -74,8 +74,51 @@ internal static class Program
         }
         CheckResultViewport();
         CheckMfluxSettings();
+        CheckConnectionSettings();
+        if (args.Length == 1 && args[0] == "--connection-check")
+        {
+            MacBridge.CheckConnectionAsync(Settings.Load(), System.Threading.CancellationToken.None).GetAwaiter().GetResult();
+            Console.WriteLine("PASS live SSH, Siliconed status and configured MFLUX paths.");
+        }
         if (args.Length == 2 && (args[0] == "--saved-result" || args[0] == "--preview"))
             CheckSavedResult(panel, args[1], args[0] == "--preview");
+    }
+
+    private static void CheckConnectionSettings()
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "RevitAiRender-check-" + Guid.NewGuid().ToString("N")));
+        try
+        {
+            var path = Path.Combine(directory.FullName, "settings.json");
+            if (Settings.ReadForEditing(path).SshTarget != null)
+                throw new InvalidOperationException("First launch must have an empty SSH target.");
+            File.WriteAllText(path, "{\"sshTarget\":\"existing-alias\",\"unrelatedField\":\"keep-me\"}");
+            var settings = Settings.ReadForEditing(path);
+            var dialog = new ConnectionWindow(settings);
+            if (((TextBox)dialog.FindName("TargetBox")).Text != "existing-alias" ||
+                ((TextBox)dialog.FindName("SilicontrolBox")).Text != Settings.DefaultCli)
+                throw new InvalidOperationException("Connection fields did not load saved values or the default CLI.");
+            dialog.Close();
+            settings.SshTarget = "updated-alias";
+            settings.MfluxPython = "/opt/mflux/bin/python";
+            try
+            {
+                settings.Save(path);
+                throw new InvalidOperationException("Saving must reject incomplete MFLUX paths.");
+            }
+            catch (RenderException error) when (error.Code == "mflux-settings") { }
+            if (Settings.ReadForEditing(path).SshTarget != "existing-alias")
+                throw new InvalidOperationException("Validation failure modified the saved SSH target.");
+            settings.MfluxCli = "/opt/mflux tools/bin/editor";
+            settings.MfluxModelPath = "/opt/render models/qwen";
+            settings.Save(path);
+            var reopened = Settings.ReadForEditing(path);
+            if (reopened.SshTarget != settings.SshTarget || reopened.MfluxModelPath != settings.MfluxModelPath ||
+                !File.ReadAllText(path).Contains("keep-me"))
+                throw new InvalidOperationException("Connection settings did not round-trip with existing fields.");
+        }
+        finally { Directory.Delete(directory.FullName, true); }
+        Console.WriteLine("PASS connection dialog, first launch, validation and local settings round-trip.");
     }
 
     private static void CheckMfluxSettings()
@@ -91,7 +134,7 @@ internal static class Program
             ResultStorage.Create(view, "fixture", true, settings, masked: true);
             throw new InvalidOperationException("A masked job must require its MFLUX paths.");
         }
-        catch (RenderException error) when (error.Message.Contains("mfluxPython")) { }
+        catch (RenderException error) when (error.Code == "mflux-settings") { }
 
         settings.MfluxPython = "/opt/mflux/bin/python";
         settings.MfluxCli = "/opt/mflux/bin/mflux-generate-qwen-2.1-edit";

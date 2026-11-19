@@ -64,7 +64,7 @@ internal static class BridgeErrors
     {
         "app_not_running" or "app_not_found" => "Siliconed недоступен. Откройте приложение на Mac.",
         "app_changed" => "Сеанс Siliconed завершился или сменился. Проверьте историю приложения на Mac.",
-        "cli_missing" => "На Mac не найден silicontrol. Проверьте путь в settings.json.",
+        "cli_missing" => "На Mac не найден silicontrol. Проверьте путь в настройках подключения AI Render.",
         "remote_compute" => "В Siliconed выбран другой компьютер. Для этой задачи нужен режим Compute On → This Mac.",
         "model" or "library_absent" => "В Siliconed недоступна установленная модель Qwen-Image-2.1 Turbo.",
         "license_not_accepted" => "Лицензия Qwen не принята. Откройте уведомление в Siliconed на Mac.",
